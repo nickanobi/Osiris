@@ -1,0 +1,35 @@
+# Environment variables (contains secrets — never commit this)
+.env
+
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite databases (runtime data, not source code)
+*.db
+*.sqlite
+*.sqlite3
+
+# macOS system files
+.DS_Store
+
+# Virtual environment folder
+venv/
+env/
+.venv/
+
+# Ollama model files (too large for GitHub)
+*.gguf
+*.bin
+
+# SSL certificates (private keys — never commit these)
+*.key
+*.pem
+
+# User data and memory files (personal data — never commit these)
+memory_*.json
+topics_*.json
+users.json
+usage.json
