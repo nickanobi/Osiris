@@ -540,6 +540,7 @@
     // ── Topic state ──────────────────────────────────────────────────
     let currentTopicId    = null;
     let currentTopicTitle = "Osiris";
+    let cachedTopics      = [];
 
     // Auto-resize textarea
     userInput.addEventListener("input", () => {
@@ -671,11 +672,32 @@
       document.getElementById("topics-overlay").classList.remove("visible");
     }
 
+    function renderTopicMessages(messages) {
+      chatWindow.innerHTML = "";
+      if (!messages || messages.length === 0) {
+        showEmptyState();
+        return;
+      }
+      messages.forEach(msg => {
+        const role   = msg.role === "user" ? "user" : "agent";
+        const row    = document.createElement("div");
+        row.classList.add("bubble-row", role);
+        const bubble = document.createElement("div");
+        bubble.classList.add("bubble");
+        if (role === "agent") bubble.classList.add("claude-response");
+        bubble.textContent = msg.content;
+        row.appendChild(bubble);
+        chatWindow.appendChild(row);
+      });
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
     async function loadTopics() {
       try {
         const res  = await fetch("/api/topics");
         const data = await res.json();
         const topics = data.topics; // sorted by last_active desc
+        cachedTopics = topics;
 
         // If no current topic, pick the most recently active
         if (!currentTopicId && topics.length > 0) {
@@ -752,14 +774,25 @@
       });
     }
 
-    function switchTopic(id, title) {
+    async function switchTopic(id, title) {
       if (id === currentTopicId) { closeTopicsDrawer(); return; }
       currentTopicId    = id;
       currentTopicTitle = title;
       document.getElementById("current-topic-name").textContent = title;
       closeTopicsDrawer();
-      showEmptyState();
-      updateLimitBar(0, false, false); // Will be updated on next loadTopics
+
+      // Find messages in cache; re-fetch if needed
+      let topic = cachedTopics.find(t => t.id === id);
+      if (!topic) {
+        const topics = await loadTopics();
+        topic = topics.find(t => t.id === id);
+      }
+      renderTopicMessages(topic ? topic.messages : []);
+
+      // Update limit bar with live counts
+      if (topic) {
+        updateLimitBar(topic.message_count, topic.near_limit, topic.is_full);
+      }
     }
 
     async function createTopic() {
