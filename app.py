@@ -955,6 +955,7 @@ def api_topics_list():
         result.append({
             "id":            t["id"],
             "title":         t["title"],
+            "messages":      t["messages"],
             "message_count": len(t["messages"]),
             "created":       t["created"],
             "last_active":   t["last_active"],
