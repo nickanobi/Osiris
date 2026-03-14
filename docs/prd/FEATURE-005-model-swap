@@ -1,0 +1,149 @@
+# PRD — Swap Inference Model to qwen2.5-coder:32b
+
+**ID:** FEATURE-005  
+**Status:** Ready for Implementation  
+**Author:** Claude Chat  
+**Created:** 2026-03-14  
+**GitHub Issue:** TBD (created by Claude Code when implementation begins)  
+**Branch:** TBD (created by Claude Code when implementation begins)  
+
+---
+
+## 1. Problem Statement
+
+Osiris currently uses `llama3.1:70b` as its inference model. This is a strong
+general-purpose model but it was not optimized for code generation, structured
+JSON output, or technical artifact production. As Osiris evolves into a personal
+builder — producing code, Node-RED flows, configs, and wireframe descriptions —
+the model needs to be replaced with one purpose-built for that work.
+
+Additionally, `llama3.1:70b` at 42GB leaves limited headroom for future
+multi-model setups. A purpose-built coding model at a smaller footprint with
+better code quality is a better fit for the direction Osiris is heading.
+
+---
+
+## 2. Goal
+
+When this is shipped, Osiris uses `qwen2.5-coder:32b` for all local inference.
+Code generation, structured JSON output, and technical responses are noticeably
+higher quality than with `llama3.1:70b`, while using less memory.
+
+---
+
+## 3. Background and Context
+
+**Hardware:** Mac Studio M3, 96GB unified memory  
+**Available VRAM (Metal):** ~72GB  
+**Current model:** `llama3.1:70b` — 42GB, general purpose  
+**Proposed model:** `qwen2.5-coder:32b` — ~20GB, code-optimized  
+
+Qwen2.5-Coder is Alibaba's code-specialized model family. The 32b variant
+scores significantly higher than llama3.1:70b on coding benchmarks (HumanEval,
+MBPP, MultiPL-E) while using less than half the memory. The smaller footprint
+also leaves room to run a second model simultaneously in future (e.g. llava:13b
+for vision tasks alongside the coding model).
+
+The model name lives in one place in `app.py`:
+```python
+MODEL = "llama3.1:70b"   # line 62
+```
+
+There are two comments elsewhere that reference the model by name — those
+should be updated for accuracy but are not functional.
+
+**Related ADRs:**
+- ADR-001 — Establishes development framework
+
+---
+
+## 4. Acceptance Criteria
+
+- [ ] AC-1: `qwen2.5-coder:32b` is pulled and available via `ollama list`
+- [ ] AC-2: `MODEL` constant in `app.py` is set to `"qwen2.5-coder:32b"`
+- [ ] AC-3: Osiris responds to a chat message using the new model (verified via Ollama logs)
+- [ ] AC-4: A Python code generation request returns syntactically valid Python
+- [ ] AC-5: A Node-RED JSON flow request returns parseable JSON
+- [ ] AC-6: Comments in `app.py` that reference `llama3.1:70b` by name are updated to reflect the new model
+- [ ] AC-7: `llama3.1:70b` is NOT deleted — it remains available via `ollama list` as a fallback
+
+---
+
+## 5. Test Matrix
+
+| Test ID | Action | Expected Result | Pass Criteria |
+|---|---|---|---|
+| T-005-01 | `ollama list` | qwen2.5-coder:32b appears | Model listed with correct name |
+| T-005-02 | `grep "MODEL" ~/agent/app.py` | Shows `qwen2.5-coder:32b` | Correct model name in config |
+| T-005-03 | Restart Osiris and send "write a Python function that reverses a string" | Returns valid Python code | Code contains `def`, correct syntax, no placeholder text |
+| T-005-04 | Send "give me a simple Node-RED flow JSON that triggers on inject and logs to debug" | Returns JSON | Response is valid JSON, parseable with `json.loads()` |
+| T-005-05 | Check Ollama server logs during a request | Shows qwen2.5-coder:32b being loaded | Log confirms correct model in use |
+| T-005-06 | `ollama list` after all tests | llama3.1:70b still present | Original model not deleted |
+
+---
+
+## 6. Scope
+
+### In Scope
+- `app.py` line 62 — update `MODEL` constant
+- `app.py` — update any comments referencing `llama3.1:70b` by name
+- Pull `qwen2.5-coder:32b` via `ollama pull` if not already present
+
+### Out of Scope
+- `app.py` — no logic changes, no routing changes
+- `static/` — no frontend changes
+- Removing or modifying `llama3.1:70b` — keep it as fallback
+- Changing the Ollama URL or any other infrastructure
+- Adding model selection UI — that is a future feature
+- Updating the system prompt — that is a separate PRD
+
+---
+
+## 7. Implementation Notes
+
+The pull will take time — `qwen2.5-coder:32b` is approximately 20GB. Claude
+Code should run `ollama pull qwen2.5-coder:32b` and wait for it to complete
+before making any code changes or running tests.
+
+The only code change is one line:
+```python
+# Before
+MODEL = "llama3.1:70b"
+
+# After  
+MODEL = "qwen2.5-coder:32b"
+```
+
+After the model constant is updated, Osiris must be restarted for the change
+to take effect. Claude Code should run `./start.sh` after the code change.
+
+T-005-03 and T-005-04 are the most important tests — they validate that the
+new model actually produces better output for the use cases Osiris is being
+built toward. If the model produces garbled or non-functional output for these
+tests, stop and report before opening a PR.
+
+---
+
+## 8. Rollback Plan
+
+The model constant is a one-line change. Rolling back is trivial.
+
+1. In `app.py` line 62, change `"qwen2.5-coder:32b"` back to `"llama3.1:70b"`
+2. `./start.sh` to restart Osiris
+3. Verify by sending a message and checking Ollama logs confirm llama3.1:70b
+
+`qwen2.5-coder:32b` does not need to be deleted — both models can coexist.
+
+---
+
+## 9. Definition of Done
+
+A PR for this feature is ready to merge when:
+
+- [ ] All acceptance criteria (AC-1 through AC-7) are met
+- [ ] All Test Matrix items (T-005-01 through T-005-06) are PASS
+- [ ] Only `app.py` was modified (one line + comment updates)
+- [ ] PR description includes test results for every Test ID
+- [ ] PR description includes "Closes #NNN"
+- [ ] No secrets, tokens, or credentials appear anywhere in the diff
+- [ ] `llama3.1:70b` confirmed still present in `ollama list`
