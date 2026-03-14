@@ -279,18 +279,49 @@ def make_save_topic_fn(data, topic, username, user_input):
     return _save
 
 def rewrite_to_third_person(text):
-    substitutions = [
-        ("my name is", "the user's name is"),
-        ("my ", "the user's "),
-        ("i am ", "the user is "),
-        ("i'm ", "the user is "),
-        ("i ", "the user "),
-    ]
-    lower = text.lower()
-    for original, replacement in substitutions:
-        if lower.startswith(original):
-            return replacement + text[len(original):]
-    return text
+    import re
+
+    # Irregular verb forms that must not get a regular "s" suffix
+    IRREGULAR = {
+        "am": "is",
+        "are": "is",
+        "have": "has",
+        "do": "does",
+        "go": "goes",
+    }
+
+    def _conjugate(verb):
+        """Return third-person singular present of verb."""
+        v = verb.lower()
+        if v in IRREGULAR:
+            return IRREGULAR[v]
+        # Already ends in s/es — leave it alone
+        if v.endswith("s"):
+            return verb
+        # Standard rule: append "s"
+        return verb + "s"
+
+    def _replace_i_verb(m):
+        """Handle 'I <verb>' → 'the user <verb-3sg>'."""
+        verb = m.group(1)
+        return "the user " + _conjugate(verb)
+
+    result = text
+
+    # 1. "my name is" → "the user's name is"  (case-insensitive, anywhere)
+    result = re.sub(r'\bmy name is\b', "the user's name is", result, flags=re.IGNORECASE)
+
+    # 2. "I am" / "I'm" → "the user is"
+    result = re.sub(r"\bI am\b", "the user is", result, flags=re.IGNORECASE)
+    result = re.sub(r"\bI'm\b", "the user is", result, flags=re.IGNORECASE)
+
+    # 3. "I <verb>" → "the user <verb-3sg>"
+    result = re.sub(r"\bI\s+([a-zA-Z]+)\b", _replace_i_verb, result)
+
+    # 4. "my " → "the user's "  (any remaining possessive)
+    result = re.sub(r'\bmy\b', "the user's", result, flags=re.IGNORECASE)
+
+    return result
 
 # --- Web search ---
 
